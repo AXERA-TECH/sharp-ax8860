@@ -1,0 +1,28 @@
+{
+  "model_type": "ONNX",
+  "npu_mode": "NPU4",
+  "target_hardware": "AX8860",
+  "input": "work/sharp_tail.onnx",
+  "output_dir": "work/build",
+  "output_name": "sharp_tail.axmodel",
+  "quant": {
+    "input_configs": [
+      {"tensor_name": "image_u", "calibration_dataset": "work/calib/tail_image_u.tar", "calibration_format": "Numpy", "calibration_size": -1},
+      {"tensor_name": "vit_out", "calibration_dataset": "work/calib/tail_vit_out.tar", "calibration_format": "Numpy", "calibration_size": -1},
+      {"tensor_name": "lat0", "calibration_dataset": "work/calib/tail_lat0.tar", "calibration_format": "Numpy", "calibration_size": -1},
+      {"tensor_name": "lat1", "calibration_dataset": "work/calib/tail_lat1.tar", "calibration_format": "Numpy", "calibration_size": -1},
+      {"tensor_name": "img_vit", "calibration_dataset": "work/calib/tail_img_vit.tar", "calibration_format": "Numpy", "calibration_size": -1}
+    ],
+    "layer_configs": [{"start_tensor_names": ["DEFAULT"], "end_tensor_names": ["DEFAULT"], "data_type": "U16"}],
+    "calibration_method": "MinMax",
+    "precision_analysis": false
+  },
+  "input_processors": [
+    {"tensor_name": "image_u", "src_dtype": "FP32"},
+    {"tensor_name": "vit_out", "src_dtype": "FP32"},
+    {"tensor_name": "lat0", "src_dtype": "FP32"},
+    {"tensor_name": "lat1", "src_dtype": "FP32"},
+    {"tensor_name": "img_vit", "src_dtype": "FP32"}
+  ],
+  "compiler": {"check": 0}
+}

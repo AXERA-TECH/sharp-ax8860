@@ -97,6 +97,10 @@ cmake --build build -j        # -> build/sharp_ax, build/libsharp_ax.so
 
 A host build that only runs the CPU post-process on dumped tensors (for checking against PyTorch): `cmake -B build-host -DSHARP_POST_ONLY=ON`.
 
+### Model conversion / 模型转换
+
+[`tools/convert/`](tools/convert/) rebuilds `sharp_tail.axmodel` and `h4_wb.bin` from Apple's checkpoint (ONNX export with the 768² rewrite, tensor splitting, CPU depth-head layer, multi-photo calibration, pulsar2 U16 config). The FP8 ViT is provided prebuilt only.
+
 ## How it works / 实现要点
 
 | | ml-sharp (GPU) | This port (AX8860) |
