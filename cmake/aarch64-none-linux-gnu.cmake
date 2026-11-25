@@ -1,0 +1,17 @@
+# Cross toolchain for AX8860 (aarch64, glibc 2.38+): Arm GNU Toolchain 13.2.Rel1 aarch64-none-linux-gnu
+# usage: cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-none-linux-gnu.cmake -DTOOLCHAIN_DIR=<.../arm-gnu-toolchain-13.2.Rel1-x86_64-aarch64-none-linux-gnu> -DBSP_DIR=<...>
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR aarch64)
+if(NOT TOOLCHAIN_DIR)
+  set(TOOLCHAIN_DIR $ENV{TOOLCHAIN_DIR})
+endif()
+if(TOOLCHAIN_DIR)
+  set(_p ${TOOLCHAIN_DIR}/bin/aarch64-none-linux-gnu-)
+else()
+  set(_p aarch64-none-linux-gnu-)
+endif()
+set(CMAKE_C_COMPILER ${_p}gcc)
+set(CMAKE_CXX_COMPILER ${_p}g++)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

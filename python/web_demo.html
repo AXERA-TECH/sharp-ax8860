@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SHARP AX8860</title>
+<style>
+ html,body{margin:0;height:100%;background:#111;color:#ddd;font:14px system-ui,sans-serif}
+ #bar{position:fixed;top:0;left:0;right:0;z-index:10;padding:8px 12px;background:rgba(0,0,0,.65);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+ select,button,input,label.btn{background:#222;color:#ddd;border:1px solid #444;padding:5px 10px;border-radius:4px;font:inherit}
+ label.btn{background:#2d5a8a;border-color:#3d7ab8;color:#fff;cursor:pointer}
+ input[type=number]{width:4.5em}
+ #msg{opacity:.85}
+ #side{position:fixed;right:10px;bottom:10px;z-index:10;background:rgba(0,0,0,.65);padding:8px 10px;border-radius:6px;max-width:320px;font-size:12px;line-height:1.6}
+ #side a{color:#8bf}
+ #drop{position:fixed;inset:0;z-index:20;background:rgba(45,90,138,.35);border:3px dashed #8bf;display:none;align-items:center;justify-content:center;font-size:24px;color:#fff}
+ @media (max-width:600px){#side{left:10px;right:10px;max-width:none}}
+</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","@mkkellogg/gaussian-splats-3d":"https://unpkg.com/@mkkellogg/gaussian-splats-3d@0.4.7/build/gaussian-splats-3d.module.js"}}</script>
+</head><body>
+<div id="bar"><b>SHARP · AX8860</b>
+ <label class="btn">Upload / 上传图片<input id="file" type="file" accept="image/*" hidden></label>
+ <label>f35 <input id="f35" type="number" value="30" min="10" max="200" step="1"> mm</label>
+ <select id="sel"></select><button id="wob">wobble: on</button>
+ <span id="msg">Upload a photo (or drop it here). Left drag: rotate · right drag: pan · wheel: zoom</span></div>
+<div id="side"></div><div id="drop">drop to upload</div>
+<script type="module">
+import * as GS from "@mkkellogg/gaussian-splats-3d";
+const $ = id => document.getElementById(id), msg = t => $("msg").textContent = t;
+const sel = $("sel"); let meta = {};
+async function refresh(pick) {
+  const hist = await (await fetch("api/history")).json();
+  sel.innerHTML = ""; meta = {};
+  for (const h of hist) { meta[h.url] = h; sel.add(new Option(`${h.id.slice(9, 15)} ${h.name}`.slice(0, 40), h.url)); }
+  if (pick) sel.value = pick;
+}
+function side(u) {
+  const h = meta[u]; if (!h) { $("side").innerHTML = ""; return; }
+  $("side").innerHTML = `<b>${h.name}</b> ${h.width}×${h.height}<br>` +
+    `end-to-end <b>${Math.round(h.total_ms)} ms</b> (decode ${Math.round(h.decode_ms)} · preprocess ${Math.round(h.preprocess_ms)} · ` +
+    `ViT ${Math.round(h.vit_ms)} · tail ${Math.round(h.tail_ms)} · h4 ${Math.round(h.h4_ms)} · post ${Math.round(h.post_ms)} · write ${Math.round(h.write_ms)})<br>` +
+    `${h.gaussians.toLocaleString()} gaussians · <a href="${u}" download="${h.id}.spz">download SPZ</a> (${(h.size / 1e6).toFixed(1)} MB)`;
+}
+let viewer = null, wobble = true, t0 = performance.now(), gen = 0;
+$("wob").onclick = e => { wobble = !wobble; e.target.textContent = "wobble: " + (wobble ? "on" : "off"); };
+async function load(u) {
+  const my = ++gen; side(u); msg("loading …");
+  if (viewer) { try { await viewer.dispose(); } catch (e) {} document.querySelectorAll("canvas").forEach(c => c.remove()); viewer = null; }
+  // SHARP 输出是 OpenCV 坐标 (x 右, y 下, z 前), 相机在原点朝 +z
+  const v = new GS.Viewer({ cameraUp: [0, -1, 0], initialCameraPosition: [0, 0, 0], initialCameraLookAt: [0, 0, 20],
+                            sharedMemoryForWorkers: false, sphericalHarmonicsDegree: 0 });
+  viewer = v;
+  await v.addSplatScene(u, { showLoadingUI: true, progressiveLoad: false, format: GS.SceneFormat.Spz });
+  if (my !== gen) return;
+  v.start();
+  const cam = v.camera, ctl = v.controls; ctl.target.set(0, 0, 20); ctl.update();
+  const base = cam.position.clone();
+  (function tick() { if (my !== gen) return;
+    if (wobble) { const t = (performance.now() - t0) / 1000;
+      cam.position.set(base.x + 0.25 * Math.sin(t * 0.8), base.y + 0.08 * Math.sin(t * 1.6), base.z); ctl.update(); }
+    requestAnimationFrame(tick); })();
+  msg("left drag: rotate · right drag: pan · wheel: zoom (limited view range, large rotations show holes)");
+}
+sel.onchange = () => load(sel.value);
+// 浏览器端预处理: 按 EXIF 转正, 长边 <= 4096, 宽高取偶数, 转 JPEG (板上用硬件 JPEG 解码)
+async function toJpeg(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const s = Math.min(1, 4096 / Math.max(bmp.width, bmp.height));
+  const w = Math.max(2, Math.round(bmp.width * s / 2) * 2), h = Math.max(2, Math.round(bmp.height * s / 2) * 2);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+  return await new Promise(r => c.toBlob(r, "image/jpeg", 0.95));
+}
+async function upload(file) {
+  if (!file) return;
+  try {
+    msg("preparing " + file.name + " …");
+    const jpg = await toJpeg(file);
+    msg("running on the NPU …"); const t1 = performance.now();
+    const r = await fetch("api/run", { method: "POST", body: jpg, headers: { "X-Name": encodeURIComponent(file.name).slice(0, 120), "X-F35": $("f35").value } });
+    const j = await r.json();
+    if (j.error) { msg("✗ " + j.error); return; }
+    msg(`done in ${((performance.now() - t1) / 1000).toFixed(1)} s, loading …`);
+    await refresh(j.url); load(j.url);
+  } catch (e) { msg("✗ " + e); }
+}
+$("file").onchange = e => upload(e.target.files[0]);
+addEventListener("dragover", e => { e.preventDefault(); $("drop").style.display = "flex"; });
+$("drop").addEventListener("dragleave", () => $("drop").style.display = "none");
+addEventListener("drop", e => { e.preventDefault(); $("drop").style.display = "none"; upload(e.dataTransfer.files[0]); });
+await refresh();
+if (sel.value) load(sel.value);
+</script></body></html>

@@ -1,0 +1,7 @@
+build*/
+models/
+python/results/
+python/libsharp_ax.so
+__pycache__/
+*.spz
+*.ply
